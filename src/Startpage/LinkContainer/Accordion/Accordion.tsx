@@ -1,5 +1,6 @@
 import { MouseEvent, PropsWithChildren, useState } from "react"
 
+import { css } from "@emotion/react"
 import styled from "@emotion/styled"
 
 const StyledAccordionContainer = styled.div`
@@ -12,10 +13,10 @@ export const AccordionContainer = ({ children }: PropsWithChildren) => (
   <StyledAccordionContainer>{children}</StyledAccordionContainer>
 )
 
-const StyledAccordionGroup = styled.div`
+const StyledAccordionGroup = styled.div<{ active: boolean }>`
   height: 400px;
   display: flex;
-  flex: 1;
+  ${({ active }) => active && "flex: 1;"}
   padding: 0 10px;
   flex-direction: row;
   border-right: 3px solid var(--default-color);
@@ -24,14 +25,14 @@ const StyledAccordionGroup = styled.div`
   }
 `
 
-const AccordionContent = styled.div<{ width: number | string | null }>`
+const AccordionContent = styled.div`
   height: 100%;
-  width: ${({ width }) => (typeof width !== "number" ? width : `${width}px`)};
+  flex: 1;
   display: flex;
   flex-direction: column;
   justify-content: center;
   overflow: hidden;
-  transition: 0.3s;
+  transition: 300ms;
 `
 
 const AccordionTitleWrapper = styled.button<{ active: boolean }>`
@@ -108,21 +109,21 @@ const AccordionTitleWrapper = styled.button<{ active: boolean }>`
 
   ${({ active }) =>
     !active &&
-    `
-        :hover{
-            > * {
-                color: var(--bg-color);
-                text-shadow:
-                    5px 0px 0 var(--accent-color),
-                    4px 0px 0 var(--accent-color),
-                    3px 0px 0 var(--accent-color),
-                    2px 0px 0 var(--accent-color),
-                    1px 0px 0 var(--accent-color),
-                    -1px 0px 0 var(--accent-color),
-                    0px 1px 0 var(--accent-color),
-                    0px -1px 0 var(--accent-color);
-            }
+    css`
+      :hover {
+        > * {
+          color: var(--bg-color);
+          text-shadow:
+            5px 0px 0 var(--accent-color),
+            4px 0px 0 var(--accent-color),
+            3px 0px 0 var(--accent-color),
+            2px 0px 0 var(--accent-color),
+            1px 0px 0 var(--accent-color),
+            -1px 0px 0 var(--accent-color),
+            0px 1px 0 var(--accent-color),
+            0px -1px 0 var(--accent-color);
         }
+      }
     `};
 `
 
@@ -146,12 +147,18 @@ const getAvailableContentWidth = (element: HTMLElement | null) => {
   const parent = element?.parentElement
   if (!parent) return 0
   if (parent.children.length === 1) return "100%"
-  const barWidth = [...parent.children].reduce(
-    (width, element) => Math.min(width, (element as HTMLElement).offsetWidth),
-    Infinity
+  const accordionHeaderWidth = (() => {
+    const width = 90
+    const paddingX = 10 * 2
+    const border = 3
+    return width + paddingX + border
+  })()
+  const firstBorder = 3
+  return (
+    parent.offsetWidth -
+    firstBorder -
+    parent.children.length * accordionHeaderWidth
   )
-  console.log(barWidth)
-  return parent.offsetWidth - parent.children.length * barWidth
 }
 
 export const AccordionGroup = ({
@@ -172,6 +179,7 @@ export const AccordionGroup = ({
           setContentWidth(0)
         }
       }}
+      active={active}
     >
       <AccordionTitleWrapper
         active={active}
@@ -184,7 +192,15 @@ export const AccordionGroup = ({
           {title}
         </AccordionTitle>
       </AccordionTitleWrapper>
-      <AccordionContent width={contentWidth} aria-hidden={!active || undefined}>
+      <AccordionContent
+        style={{
+          width:
+            typeof contentWidth === "string"
+              ? contentWidth
+              : `${contentWidth ?? 0}px`,
+        }}
+        aria-hidden={!active || undefined}
+      >
         {children}
       </AccordionContent>
     </StyledAccordionGroup>
