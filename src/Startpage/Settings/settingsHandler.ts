@@ -85,6 +85,58 @@ export const Links = {
   parse: (linkGroups: string) => JSON.parse(linkGroups) as linkGroup[],
 }
 
+const STORAGE_KEYS = ["search-settings", "themes", "link-groups", "design"] as const
+const EXPORT_FORMAT = "fluidity-settings-v1"
+
+interface SettingsBundle {
+  format: typeof EXPORT_FORMAT
+  exportedAt: string
+  settings: Record<string, unknown>
+}
+
+export const Backup = {
+  exportToFile: () => {
+    const settings: Record<string, unknown> = {}
+    for (const key of STORAGE_KEYS) {
+      const raw = localStorage.getItem(key)
+      if (raw !== null) settings[key] = JSON.parse(raw)
+    }
+    const bundle: SettingsBundle = {
+      format: EXPORT_FORMAT,
+      exportedAt: new Date().toISOString(),
+      settings,
+    }
+    const blob = new Blob([JSON.stringify(bundle, null, 2)], {
+      type: "application/json",
+    })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-")
+    a.href = url
+    a.download = `fluidity-settings-${stamp}.json`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+  },
+
+  importFromFile: async (file: File) => {
+    const text = await file.text()
+    const parsed = JSON.parse(text) as Partial<SettingsBundle>
+    if (parsed.format !== EXPORT_FORMAT || !parsed.settings) {
+      throw new Error(
+        `Not a Fluidity settings file (expected format "${EXPORT_FORMAT}").`
+      )
+    }
+    for (const key of STORAGE_KEYS) {
+      const value = parsed.settings[key]
+      if (value !== undefined) {
+        localStorage.setItem(key, JSON.stringify(value))
+      }
+    }
+  },
+}
+
 export const Design = {
   get: () => {
     const lsDesign = localStorage.getItem("design")

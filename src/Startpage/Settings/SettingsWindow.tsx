@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useRef, useState } from "react"
 
 import styled from "@emotion/styled"
 import {
@@ -6,6 +6,8 @@ import {
   faTrash,
   faSave,
   faFire,
+  faDownload,
+  faUpload,
 } from "@fortawesome/free-solid-svg-icons"
 
 import { Changelog } from "./Changelog/Changelog"
@@ -137,6 +139,7 @@ export const SettingsWindow = ({ hidePopup }: props) => {
   const [searchSettings, setSearchSettings] = useState(
     Settings.Search.getWithFallback()
   )
+  const importInputRef = useRef<HTMLInputElement>(null)
 
   const applyValues = () => {
     Settings.Design.set(design)
@@ -144,6 +147,20 @@ export const SettingsWindow = ({ hidePopup }: props) => {
     Settings.Search.set(searchSettings)
     Settings.Links.set(linkGroups)
     window.location.reload()
+  }
+
+  const handleImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ""
+    if (!file) return
+    try {
+      await Settings.Backup.importFromFile(file)
+      window.location.reload()
+    } catch (err) {
+      window.alert(
+        `Import failed: ${err instanceof Error ? err.message : String(err)}`
+      )
+    }
   }
 
   return (
@@ -201,9 +218,32 @@ export const SettingsWindow = ({ hidePopup }: props) => {
           icon={faFire}
         />
         <SettingsButton
+          onClick={() => Settings.Backup.exportToFile()}
+          text="Export"
+          icon={faDownload}
+        />
+        <SettingsButton
+          onClick={() => importInputRef.current?.click()}
+          text="Import"
+          icon={faUpload}
+        />
+        <input
+          ref={importInputRef}
+          type="file"
+          accept="application/json,.json"
+          style={{ display: "none" }}
+          onChange={handleImportFile}
+        />
+        <SettingsButton
           onClick={() => {
-            localStorage.clear()
-            window.location.reload()
+            if (
+              window.confirm(
+                "Delete all settings? Export first if you want a backup."
+              )
+            ) {
+              localStorage.clear()
+              window.location.reload()
+            }
           }}
           text="Delete All Settings"
           icon={faTrash}
