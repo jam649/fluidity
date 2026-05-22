@@ -87,25 +87,89 @@ export const Links = {
 
 const STORAGE_KEYS = ["search-settings", "themes", "link-groups", "design"] as const
 const EXPORT_FORMAT = "fluidity-settings-v1"
+const SYNC_URL = "/api/state"
+const SYNC_TIMEOUT_MS = 4000
 
 interface SettingsBundle {
   format: typeof EXPORT_FORMAT
-  exportedAt: string
+  exportedAt?: string
   settings: Record<string, unknown>
+}
+
+function readBundleFromLocalStorage(): SettingsBundle {
+  const settings: Record<string, unknown> = {}
+  for (const key of STORAGE_KEYS) {
+    const raw = localStorage.getItem(key)
+    if (raw !== null) {
+      try {
+        settings[key] = JSON.parse(raw)
+      } catch {
+        // skip corrupted key
+      }
+    }
+  }
+  return {
+    format: EXPORT_FORMAT,
+    exportedAt: new Date().toISOString(),
+    settings,
+  }
+}
+
+function applyBundleToLocalStorage(bundle: SettingsBundle) {
+  for (const key of STORAGE_KEYS) {
+    const value = bundle.settings[key]
+    if (value !== undefined) {
+      localStorage.setItem(key, JSON.stringify(value))
+    }
+  }
+}
+
+export const Sync = {
+  fetchFromServer: async (signal?: AbortSignal): Promise<boolean> => {
+    const ctl = new AbortController()
+    const timer = setTimeout(() => ctl.abort(), SYNC_TIMEOUT_MS)
+    const combined = signal
+      ? AbortSignal.any([signal, ctl.signal])
+      : ctl.signal
+    try {
+      const res = await fetch(SYNC_URL, { signal: combined, credentials: "same-origin" })
+      if (!res.ok) {
+        console.warn(`[sync] GET failed: ${res.status}`)
+        return false
+      }
+      const data = (await res.json()) as Partial<SettingsBundle>
+      if (data.format !== EXPORT_FORMAT || !data.settings) {
+        console.warn("[sync] server returned unexpected format")
+        return false
+      }
+      if (Object.keys(data.settings).length === 0) return false
+      applyBundleToLocalStorage(data as SettingsBundle)
+      return true
+    } catch (err) {
+      console.warn("[sync] fetch error:", err)
+      return false
+    } finally {
+      clearTimeout(timer)
+    }
+  },
+
+  pushToServer: async (): Promise<void> => {
+    const bundle = readBundleFromLocalStorage()
+    const res = await fetch(SYNC_URL, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(bundle),
+      credentials: "same-origin",
+    })
+    if (!res.ok) {
+      throw new Error(`server responded ${res.status}`)
+    }
+  },
 }
 
 export const Backup = {
   exportToFile: () => {
-    const settings: Record<string, unknown> = {}
-    for (const key of STORAGE_KEYS) {
-      const raw = localStorage.getItem(key)
-      if (raw !== null) settings[key] = JSON.parse(raw)
-    }
-    const bundle: SettingsBundle = {
-      format: EXPORT_FORMAT,
-      exportedAt: new Date().toISOString(),
-      settings,
-    }
+    const bundle = readBundleFromLocalStorage()
     const blob = new Blob([JSON.stringify(bundle, null, 2)], {
       type: "application/json",
     })
@@ -128,12 +192,7 @@ export const Backup = {
         `Not a Fluidity settings file (expected format "${EXPORT_FORMAT}").`
       )
     }
-    for (const key of STORAGE_KEYS) {
-      const value = parsed.settings[key]
-      if (value !== undefined) {
-        localStorage.setItem(key, JSON.stringify(value))
-      }
-    }
+    applyBundleToLocalStorage(parsed as SettingsBundle)
   },
 }
 

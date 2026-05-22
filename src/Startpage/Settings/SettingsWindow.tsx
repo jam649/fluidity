@@ -141,11 +141,20 @@ export const SettingsWindow = ({ hidePopup }: props) => {
   )
   const importInputRef = useRef<HTMLInputElement>(null)
 
-  const applyValues = () => {
+  const applyValues = async () => {
     Settings.Design.set(design)
     Settings.Themes.set(themes)
     Settings.Search.set(searchSettings)
     Settings.Links.set(linkGroups)
+    try {
+      await Settings.Sync.pushToServer()
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      const proceed = window.confirm(
+        `Saved locally, but couldn't sync to server (${msg}). Continue and reload anyway?`
+      )
+      if (!proceed) return
+    }
     window.location.reload()
   }
 
